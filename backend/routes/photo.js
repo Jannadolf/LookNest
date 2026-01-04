@@ -8,16 +8,16 @@ const Photo = require('../models/Photo');
 // @access  Private
 router.post('/', authMiddleware, async (req, res) => {
   try {
-    const { title, description, imageUrl } = req.body;
+    const { title, description, imageUrls } = req.body;
 
-    if (!title || !imageUrl) {
-      return res.status(400).json({ message: 'Title and image are required' });
+    if (!title || !imageUrls || !Array.isArray(imageUrls) || imageUrls.length === 0) {
+      return res.status(400).json({ message: 'Title and at least one image are required' });
     }
 
     const photo = new Photo({
       title,
       description,
-      imageUrl,
+      imageUrl: imageUrls,
       user: req.userId
     });
 

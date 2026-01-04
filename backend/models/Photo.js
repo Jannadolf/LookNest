@@ -11,8 +11,14 @@ const photoSchema = new mongoose.Schema({
     trim: true
   },
   imageUrl: {
-    type: String,
-    required: [true, 'Image URL is required']
+    type: [String],
+    required: [true, 'Image URL is required'],
+    validate: {
+      validator: function(v) {
+        return v.length > 0;
+      },
+      message: 'At least one image is required'
+    }
   },
   user: {
     type: mongoose.Schema.Types.ObjectId,
