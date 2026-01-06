@@ -57,16 +57,14 @@ const userSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'
   }],
-  profileViews: [{
-    viewer: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'User'
-    },
-    viewedAt: {
-      type: Date,
-      default: Date.now
-    }
+  followRequests: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
   }],
+  profileViews: {
+    type: mongoose.Schema.Types.Mixed,
+    default: []
+  },
   createdAt: {
     type: Date,
     default: Date.now

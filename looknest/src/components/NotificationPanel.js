@@ -1,65 +1,64 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import './NotificationPanel.css';
 
 function NotificationPanel({ isOpen, onClose }) {
-  const notifications = [
-    {
-      id: 1,
-      image: 'notification-1',
-      title: "You'd vibe with this",
-      time: '31m',
-      type: 'new'
-    },
-    {
-      id: 2,
-      image: 'notification-2',
-      title: "This is so you-coded",
-      time: '4h',
-      type: 'new'
-    },
-    {
-      id: 3,
-      image: 'notification-3',
-      title: "Your taste is next level",
-      time: '8h',
-      type: 'new'
-    },
-    {
-      id: 4,
-      image: 'notification-4',
-      title: "Big mood",
-      time: '1d',
-      type: 'new'
-    },
-    {
-      id: 5,
-      image: 'notification-5',
-      title: "Your taste is next level",
-      time: '1d',
-      type: 'new'
-    },
-    {
-      id: 6,
-      image: 'notification-6',
-      title: "Ideas as original as you",
-      time: '2d',
-      type: 'seen'
-    },
-    {
-      id: 7,
-      image: 'notification-7',
-      title: "This is so you-coded",
-      time: '2d',
-      type: 'seen'
-    },
-    {
-      id: 8,
-      image: 'notification-8',
-      title: "Your taste is next level",
-      time: '3d',
-      type: 'seen'
+  const [notifications, setNotifications] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (isOpen) {
+      fetchNotifications();
     }
-  ];
+  }, [isOpen]);
+
+  const fetchNotifications = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('http://localhost:5000/api/notifications', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      const data = await response.json();
+      setNotifications(data);
+    } catch (error) {
+      console.error('Error fetching notifications:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAccept = async (senderId) => {
+    try {
+      const token = localStorage.getItem('token');
+      await fetch(`http://localhost:5000/api/user/${senderId}/follow/accept`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      // Refresh notifications
+      fetchNotifications();
+    } catch (error) {
+      console.error('Error accepting follow request:', error);
+    }
+  };
+
+  const handleReject = async (senderId) => {
+    try {
+      const token = localStorage.getItem('token');
+      await fetch(`http://localhost:5000/api/user/${senderId}/follow/reject`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      // Refresh notifications
+      fetchNotifications();
+    } catch (error) {
+      console.error('Error rejecting follow request:', error);
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -72,65 +71,31 @@ function NotificationPanel({ isOpen, onClose }) {
         </div>
         
         <div className="notification-content">
-          <div className="notification-section">
-            <h3>New</h3>
-            {notifications.filter(n => n.type === 'new').map(notification => (
-              <div key={notification.id} className="notification-item">
+          {loading ? (
+            <div className="loading">Loading notifications...</div>
+          ) : notifications.length === 0 ? (
+            <div className="no-notifications">No notifications yet</div>
+          ) : (
+            notifications.map(notification => (
+              <div key={notification._id} className={`notification-item ${notification.isRead ? 'seen' : 'new'}`}>
                 <div className="notification-thumbnail">
-                  <svg width="48" height="64" viewBox="0 0 48 64" fill="none">
-                    <rect width="48" height="64" rx="8" fill="#e3f2fd"/>
-                    <rect x="8" y="8" width="32" height="4" rx="2" fill="#90caf9"/>
-                    <rect x="8" y="16" width="24" height="3" rx="1.5" fill="#64b5f6"/>
-                    <rect x="8" y="22" width="28" height="3" rx="1.5" fill="#64b5f6"/>
-                    <rect x="8" y="32" width="32" height="20" rx="4" fill="#42a5f5"/>
-                  </svg>
+                  <img src={notification.sender?.profileImage || '/default-avatar.png'} alt={notification.sender?.fullName} />
                 </div>
                 <div className="notification-details">
-                  <p className="notification-title">{notification.title}</p>
+                  <p className="notification-title">{notification.message}</p>
+                  {notification.type === 'follow_request' && (
+                    <div className="follow-actions">
+                      <button className="accept-btn" onClick={() => handleAccept(notification.sender._id)}>Accept</button>
+                      <button className="reject-btn" onClick={() => handleReject(notification.sender._id)}>Reject</button>
+                    </div>
+                  )}
                 </div>
                 <div className="notification-meta">
-                  <span className="notification-time">{notification.time}</span>
-                  <button className="notification-menu">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                      <circle cx="12" cy="5" r="2"/>
-                      <circle cx="12" cy="12" r="2"/>
-                      <circle cx="12" cy="19" r="2"/>
-                    </svg>
-                  </button>
+                  <span className="notification-time">{new Date(notification.createdAt).toLocaleDateString()}</span>
                 </div>
               </div>
-            ))}
-          </div>
-
-          <div className="notification-section">
-            <h3>Seen</h3>
-            {notifications.filter(n => n.type === 'seen').map(notification => (
-              <div key={notification.id} className="notification-item seen">
-                <div className="notification-thumbnail">
-                  <svg width="48" height="64" viewBox="0 0 48 64" fill="none">
-                    <rect width="48" height="64" rx="8" fill="#f0f4f8"/>
-                    <rect x="8" y="8" width="32" height="4" rx="2" fill="#cbd5e0"/>
-                    <rect x="8" y="16" width="24" height="3" rx="1.5" fill="#e2e8f0"/>
-                    <rect x="8" y="22" width="28" height="3" rx="1.5" fill="#e2e8f0"/>
-                    <rect x="8" y="32" width="32" height="20" rx="4" fill="#a0aec0"/>
-                  </svg>
-                </div>
-                <div className="notification-details">
-                  <p className="notification-title">{notification.title}</p>
-                </div>
-                <div className="notification-meta">
-                  <span className="notification-time">{notification.time}</span>
-                  <button className="notification-menu">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                      <circle cx="12" cy="5" r="2"/>
-                      <circle cx="12" cy="12" r="2"/>
-                      <circle cx="12" cy="19" r="2"/>
-                    </svg>
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
+            ))
+          )}
         </div>
       </div>
     </>

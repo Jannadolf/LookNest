@@ -112,7 +112,7 @@ router.get('/:userId', async (req, res) => {
 });
 
 // @route   POST /api/users/:userId/follow
-// @desc    Follow a user
+// @desc    Send follow request to a user
 // @access  Private
 router.post('/:userId/follow', authMiddleware, async (req, res) => {
   try {
@@ -132,24 +132,26 @@ router.post('/:userId/follow', authMiddleware, async (req, res) => {
       return res.status(400).json({ message: 'Already following this user' });
     }
 
-    // Add to following list of current user
-    currentUser.following.push(req.params.userId);
-    await currentUser.save();
+    // Check if request already sent
+    if (userToFollow.followRequests.includes(req.userId)) {
+      return res.status(400).json({ message: 'Follow request already sent' });
+    }
 
-    // Add to followers list of target user
-    userToFollow.followers.push(req.userId);
+    // Add to follow requests of target user
+    userToFollow.followRequests.push(req.userId);
     await userToFollow.save();
 
-    // Create notification for the followed user
+    // Create notification for the target user
     const notification = new Notification({
       recipient: req.params.userId,
       sender: req.userId,
-      type: 'follow',
-      message: `${currentUser.fullName} started following you`
+      type: 'follow_request',
+      message: `${currentUser.fullName} sent you a follow request`
     });
     await notification.save();
+    console.log('Follow request notification created for user', req.params.userId, 'from', req.userId);
 
-    res.json({ message: 'User followed successfully' });
+    res.json({ message: 'Follow request sent successfully' });
   } catch (error) {
     console.error('Follow user error:', error);
     res.status(500).json({ message: 'Server error' });
@@ -183,15 +185,79 @@ router.delete('/:userId/follow', authMiddleware, async (req, res) => {
   }
 });
 
+// @route   POST /api/users/:userId/follow/accept
+// @desc    Accept follow request
+// @access  Private
+router.post('/:userId/follow/accept', authMiddleware, async (req, res) => {
+  try {
+    const requester = await User.findById(req.params.userId);
+    const currentUser = await User.findById(req.userId);
+
+    if (!requester) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Check if follow request exists
+    if (!currentUser.followRequests.includes(req.params.userId)) {
+      return res.status(400).json({ message: 'No follow request from this user' });
+    }
+
+    // Remove from follow requests
+    currentUser.followRequests = currentUser.followRequests.filter(id => id.toString() !== req.params.userId);
+    // Add to followers of current user
+    currentUser.followers.push(req.params.userId);
+    await currentUser.save();
+
+    // Add to following of requester
+    requester.following.push(req.userId);
+    await requester.save();
+
+    // Create notification for the requester
+    const notification = new Notification({
+      recipient: req.params.userId,
+      sender: req.userId,
+      type: 'follow',
+      message: `${currentUser.fullName} accepted your follow request`
+    });
+    await notification.save();
+
+    res.json({ message: 'Follow request accepted' });
+  } catch (error) {
+    console.error('Accept follow request error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// @route   POST /api/users/:userId/follow/reject
+// @desc    Reject follow request
+// @access  Private
+router.post('/:userId/follow/reject', authMiddleware, async (req, res) => {
+  try {
+    const currentUser = await User.findById(req.userId);
+
+    // Remove from follow requests
+    currentUser.followRequests = currentUser.followRequests.filter(id => id.toString() !== req.params.userId);
+    await currentUser.save();
+
+    res.json({ message: 'Follow request rejected' });
+  } catch (error) {
+    console.error('Reject follow request error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 // @route   GET /api/users/:userId/follow-status
 // @desc    Check if current user is following the specified user
 // @access  Private
 router.get('/:userId/follow-status', authMiddleware, async (req, res) => {
   try {
     const currentUser = await User.findById(req.userId);
-    const isFollowing = currentUser.following.includes(req.params.userId);
+    const targetUser = await User.findById(req.params.userId);
     
-    res.json({ isFollowing });
+    const isFollowing = currentUser.following.includes(req.params.userId);
+    const isRequested = targetUser.followRequests.includes(req.userId);
+    
+    res.json({ isFollowing, isRequested });
   } catch (error) {
     console.error('Check follow status error:', error);
     res.status(500).json({ message: 'Server error' });
@@ -209,7 +275,14 @@ router.get('/:userId/followers', authMiddleware, async (req, res) => {
     }
 
     const followers = await User.find({ _id: { $in: user.followers } }).select('username profilePicture');
-    res.json(followers);
+    let result = followers.map(f => ({ ...f.toObject(), status: 'accepted' }));
+
+    if (req.userId === req.params.userId) {
+      const pending = await User.find({ _id: { $in: user.followRequests } }).select('username profilePicture fullName');
+      result = result.concat(pending.map(p => ({ ...p.toObject(), status: 'pending' })));
+    }
+
+    res.json(result);
   } catch (error) {
     console.error('Get followers error:', error);
     res.status(500).json({ message: 'Server error' });
@@ -260,7 +333,7 @@ router.get('/:userId/views', authMiddleware, async (req, res) => {
 // @route   DELETE /api/users/:userId/followers/:followerId
 // @desc    Remove a follower
 // @access  Private
-router.delete('/:userId/followers/:followerId', authMiddlewareMiddleware, async (req, res) => {
+router.delete('/:userId/followers/:followerId', authMiddleware, async (req, res) => {
   try {
     const user = await User.findById(req.params.userId);
     const follower = await User.findById(req.params.followerId);

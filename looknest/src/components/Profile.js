@@ -4,15 +4,67 @@ import './Profile.css';
 function Profile() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [showFollowersModal, setShowFollowersModal] = useState(false);
+  const [showFollowingModal, setShowFollowingModal] = useState(false);
+  const [followersList, setFollowersList] = useState([]);
+  const [followingList, setFollowingList] = useState([]);
 
   useEffect(() => {
-    // Get user data from localStorage
-    const userData = localStorage.getItem('user');
-    if (userData) {
-      setUser(JSON.parse(userData));
-    }
-    setLoading(false);
+    fetchUserProfile();
   }, []);
+
+  const fetchUserProfile = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('http://localhost:5000/api/user/profile', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      const userData = await response.json();
+      if (response.ok) {
+        setUser(userData);
+      } else {
+        console.error('Failed to fetch profile:', userData.message);
+      }
+    } catch (error) {
+      console.error('Error fetching profile:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchFollowers = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('http://localhost:5000/api/user/profile/followers', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      const data = await response.json();
+      setFollowersList(data);
+      setShowFollowersModal(true);
+    } catch (error) {
+      console.error('Error fetching followers:', error);
+    }
+  };
+
+  const fetchFollowing = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('http://localhost:5000/api/user/profile/following', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      const data = await response.json();
+      setFollowingList(data);
+      setShowFollowingModal(true);
+    } catch (error) {
+      console.error('Error fetching following:', error);
+    }
+  };
 
   if (loading) {
     return (
@@ -54,16 +106,16 @@ function Profile() {
           {user.bio && <p className="profile-bio">{user.bio}</p>}
 
           <div className="profile-stats">
-            <div className="stat-item">
+            <div className="stat-item clickable" onClick={fetchFollowers}>
               <span className="stat-number">{user.followers?.length || 0}</span>
               <span className="stat-label">Followers</span>
             </div>
-            <div className="stat-item">
+            <div className="stat-item clickable" onClick={fetchFollowing}>
               <span className="stat-number">{user.following?.length || 0}</span>
               <span className="stat-label">Following</span>
             </div>
             <div className="stat-item">
-              <span className="stat-number">{user.profileViews || 0}</span>
+              <span className="stat-number">{Array.isArray(user.profileViews) ? user.profileViews.length : (user.profileViews || 0)}</span>
               <span className="stat-label">Views</span>
             </div>
           </div>
@@ -134,6 +186,48 @@ function Profile() {
           </div>
         </div>
       </div>
+
+      {showFollowersModal && (
+        <div className="modal-overlay" onClick={() => setShowFollowersModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <h2>Followers</h2>
+            <div className="modal-list">
+              {followersList.length === 0 ? (
+                <p>No followers yet</p>
+              ) : (
+                followersList.map((follower) => (
+                  <div key={follower._id} className="list-item">
+                    <img src={follower.profileImage || '/default-avatar.png'} alt={follower.fullName} className="list-avatar" />
+                    <span>{follower.fullName} {follower.status === 'pending' && '(Pending)'}</span>
+                  </div>
+                ))
+              )}
+            </div>
+            <button className="close-btn" onClick={() => setShowFollowersModal(false)}>Close</button>
+          </div>
+        </div>
+      )}
+
+      {showFollowingModal && (
+        <div className="modal-overlay" onClick={() => setShowFollowingModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <h2>Following</h2>
+            <div className="modal-list">
+              {followingList.length === 0 ? (
+                <p>Not following anyone yet</p>
+              ) : (
+                followingList.map((following) => (
+                  <div key={following._id} className="list-item">
+                    <img src={following.profileImage || '/default-avatar.png'} alt={following.fullName} className="list-avatar" />
+                    <span>{following.fullName}</span>
+                  </div>
+                ))
+              )}
+            </div>
+            <button className="close-btn" onClick={() => setShowFollowingModal(false)}>Close</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
